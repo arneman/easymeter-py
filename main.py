@@ -1,12 +1,11 @@
 import sys
 import re
 import serial
-import traceback
 import logging
 import time
 import multiprocessing
 import json
-import paho.mqtt.client as mqtt
+
 
 from config import CONFIG
 
@@ -38,23 +37,27 @@ def extract(keyword, reading):
     return value, unit
 
 
-def worker_read_meter(task_queue):
+def worker_read_meter(task_queues):
+    task_queues = task_queues[:-1]  #remove last entry because is a list with all other queues (=the argument for this worker)
+    logger = multiprocessing.get_logger()
     while True:
         try:
             reading = read()
-            print(reading, len(reading))
             if reading and len(reading) == 270:
-                results ={'ts': time.time()} 
+                reading_dict ={'ts': time.time()} 
                 for key in KEYWORDS:
                     value, unit = extract(key, reading)
-                    results[key] = value
-                    print(key,value,unit)
-                task_queue.put(results)
-        except Exception as e:
-            traceback.print_tb(e)
-        #time.sleep(0.1)
+                    reading_dict[key] = value
+                    logger.debug((key,value,unit))
+                #put the reading_dict into all publishing queues
+                for queue in task_queues:
+                    queue.put(reading_dict)
+        except:
+            logger.exception('Error in worker_read_meter')
 
 def worker_publish_mqtt(task_queue):
+    import paho.mqtt.client as mqtt
+    logger = multiprocessing.get_logger()
     client = mqtt.Client()
 
     def mqtt_connect():
@@ -68,33 +71,60 @@ def worker_publish_mqtt(task_queue):
                        bind_address="")
  
     def mqtt_publish(payload):
-        client.publish(topic=CONFIG['mqtt']['topic'], 
-                       payload=json.dumps(reading),
-                       qos=CONFIG['mqtt']['qos'],
-                       retain=CONFIG['mqtt']['retain'])
+        mqtt_connect()
+        return client.publish(topic=CONFIG['mqtt']['topic'], 
+                              payload=json.dumps(reading),
+                              qos=CONFIG['mqtt']['qos'],
+                              retain=CONFIG['mqtt']['retain'])
 
-    mqtt_connect()
-    
     while True:
         try:
             if not task_queue.empty():
                 reading = task_queue.get()
-                mqtt_connect()
                 mqtt_publish(reading)
-                print('worker_publish_mqtt', reading)
-        except Exception as e:
-            traceback.print_tb(e)
+                logger.debug('worker_publish_mqtt' + json.dumps(reading))
+        except:
+            logger.exception('Error in worker_publish_mqtt')
         time.sleep(0.1)
 
+def worker_sqlite(task_queue):
+    raise NotImplementedError
+
+def worker_logfile(task_queue):
+    raise NotImplementedError
+
 def run():
-    task_queue = multiprocessing.Queue()
-    #multiprocessing.log_to_stderr(logging.ERROR)
+    multiprocessing.log_to_stderr(CONFIG['loglevel'])
+    multiprocessing.get_logger().setLevel(CONFIG['loglevel'])
 
-    multiprocessing.Process(
-            target=worker_read_meter, args=(task_queue,)).start()
+    #target functions for publishing services
+    targets ={'mqtt': worker_publish_mqtt,
+              'logfile': worker_logfile,
+              'sqlite': worker_sqlite} 
 
-    multiprocessing.Process(
-            target=worker_publish_mqtt, args=(task_queue,)).start()
+    #prepare workers (create queues, link target functions)
+    worker_args = [] 
+    worker_targets = [] 
+    for key in targets:
+        if CONFIG[key]['enabled']:
+            worker_args.append(multiprocessing.Queue())
+            worker_targets.append(targets[key])
+    #now add worker_read_meter and give him a ref to all queues as argument
+    worker_args.append(worker_args)
+    worker_targets.append(worker_read_meter)
+
+    #start workers
+    processes = [] 
+    for idx,_ in enumerate(worker_targets):
+        p = multiprocessing.Process(target=worker_targets[idx],
+                                    args=(worker_args[idx],))
+        p.daemon = True #main process kills children before it will be terminated
+        p.start()
+        processes.append(p)
+
+    # because we use deamon=True, the main process has to be kept alive
+    while True:
+        time.sleep(1)
 
 if __name__ == '__main__':
     run()

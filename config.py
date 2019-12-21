@@ -1,10 +1,13 @@
 CONFIG = {'dev': '/dev/usb-ir-lesekopf0',
+          'loglevel': 'DEBUG',
           'mqtt': {'enabled': True,
                    'host': 'localhost',
                    'port': 1883,
                    'keepalive': 60,
-                   'auth': {'enabled': True, 'username': 'mqtt_user', 'password': 'mqtt_pwd' },
+                   'auth': {'enabled': True, 'username': 'mqtt_user', 'password': 'mqtt_password' },
                    'topic': 'powermeter/reading',
                    'retain': True,
-                   'qos': 0 } 
+                   'qos': 0 } ,
+          'logfile': {'enabled': True},
+          'sqlite': {'enabled': False},
          } 
