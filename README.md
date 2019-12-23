@@ -47,6 +47,7 @@ Setup without virtual environment
 - You should see a lot debug informations, but no Exceptions
 - Check if the sqlite database has been created in the specified path (config.py)
 - Check if the mqtt messages will be published correctly
+- Exit with CTRL+C
 
 ## Install systemd service and enable autostart
 
@@ -59,6 +60,6 @@ Setup without virtual environment
 
 ## Misc
 
-For bugs or feature requests, please create an issue on github.
+For bugs or feature requests, please create an issue on github. "Star" or "Watch" the github repo if you like my work.
 
 Regards, Arne Drees
