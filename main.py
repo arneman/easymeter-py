@@ -34,14 +34,15 @@ SQLITE_CREATE = """CREATE TABLE IF NOT EXISTS meter_data
                     ,TS TEXT DEFAULT CURRENT_TIMESTAMP);"""
 
 def read():
-    with serial.Serial(port=CONFIG['dev'], baudrate=9600, bytesize=7, parity='E', timeout=3, exclusive=True) as ser:
-        reading = ser.read(270).decode("utf-8")
-        #reading = ser.read_until('!').decode("utf-8")
+    with serial.Serial(port=CONFIG['dev'], baudrate=9600, bytesize=7, parity='E', timeout=2.5, exclusive=True) as ser:
+        #reading = ser.read(500).decode("utf-8")
+        reading = ser.read_until(b'!').decode("utf-8")
         ser.reset_input_buffer()
 
         if reading.startswith('/'):
-            return reading
-        return
+            return (True, reading)
+        time.sleep(0.5) #wait to reach the right cycle
+        return (False, reading)
 
 def extract(keyword, reading):
     pattern = KEYWORDS[keyword]['keyword']
@@ -56,10 +57,10 @@ def worker_read_meter(task_queues):
     logger = multiprocessing.get_logger()
     while True:
         try:
-            reading = read()
-            logger.debug(f'reading: {reading}')
+            success, reading = read()
+            logger.debug(f'reading: {reading}, len: {len(reading)}')
 
-            if reading and len(reading) == 270:
+            if success: # and len(reading) == 270:
                 reading_dict ={'ts': datetime.datetime.now().strftime(TS_FORMAT)} 
                 for key in KEYWORDS:
                     value, unit = extract(key, reading)
@@ -217,16 +218,6 @@ def run():
 
 if __name__ == '__main__':
     run()
-
-
-
-## Adapt acutal value
-#if keyword == 'In':
-#    value = max(value, 0)
-#elif keyword == 'Out':
-#    value = max(-value, 0)
-
-
 
 
 """ 
