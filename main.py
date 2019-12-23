@@ -34,13 +34,14 @@ SQLITE_CREATE = """CREATE TABLE IF NOT EXISTS meter_data
                     ,TS TEXT DEFAULT CURRENT_TIMESTAMP);"""
 
 def read():
-    with serial.Serial(port=CONFIG['dev'], baudrate=9600, bytesize=7, parity='E', timeout=2) as ser:
-        while True:
-            reading = ser.read(1000).decode("utf-8")
-            ser.flushInput()
-            if reading.startswith('/'):
-                return reading
-            # Try again if reading was unsuccessful
+    with serial.Serial(port=CONFIG['dev'], baudrate=9600, bytesize=7, parity='E', timeout=3, exclusive=True) as ser:
+        reading = ser.read(270).decode("utf-8")
+        #reading = ser.read_until('!').decode("utf-8")
+        ser.reset_input_buffer()
+
+        if reading.startswith('/'):
+            return reading
+        return
 
 def extract(keyword, reading):
     pattern = KEYWORDS[keyword]['keyword']
@@ -56,6 +57,8 @@ def worker_read_meter(task_queues):
     while True:
         try:
             reading = read()
+            logger.debug(f'reading: {reading}')
+
             if reading and len(reading) == 270:
                 reading_dict ={'ts': datetime.datetime.now().strftime(TS_FORMAT)} 
                 for key in KEYWORDS:
@@ -65,6 +68,8 @@ def worker_read_meter(task_queues):
                 #put the reading_dict into all publishing queues
                 for queue in task_queues:
                     queue.put(reading_dict)
+            else:
+                logger.error(f'reading failed {reading}')
         except:
             logger.exception('Error in worker_read_meter')
 
