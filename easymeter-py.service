@@ -1,0 +1,13 @@
+[Unit]
+Description=get power meter values
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/easymeter-py/easymeter-py.sh
+TimeoutSec=0
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target
