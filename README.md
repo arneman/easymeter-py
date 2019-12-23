@@ -2,7 +2,7 @@
 
 Python script to read power meter data from Easymeter meters and publish them via mqtt and/or into a sqlite database.
 
-I'm using this script on a Raspberry Pi 4 with rasbian buster and the "IR Schreib/Lesekopf USB (Optokopf)" USB IR reader from Weidmann with an EASYMETER Q3DA. Maybe you have to change soemthing for other setups.
+I'm using this script on a Raspberry Pi 4 with rasbian buster and the "IR Schreib/Lesekopf USB (Optokopf)" USB IR reader from Weidmann with an EASYMETER Q3DA. Maybe you have to change something for other setups.
 
 ## Requirements
 
@@ -43,9 +43,9 @@ Setup without virtual environment
 
 ## First run
 
-- Set the loglevel in config.py to "DEBUG" and run `./easymeter-py`
-- You should see a lot of debug informations
-- Check if the sqlite database was created in the specified path (config.py)
+- Set the loglevel in config.py to "DEBUG" and run `./easymeter-py.sh`
+- You should see a lot debug informations, but no Exceptions
+- Check if the sqlite database has been created in the specified path (config.py)
 - Check if the mqtt messages will be published correctly
 
 ## Install systemd service and enable autostart
