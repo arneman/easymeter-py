@@ -5,6 +5,8 @@ import logging
 import time
 import multiprocessing
 import json
+import datetime
+import os
 
 
 from config import CONFIG
@@ -19,6 +21,17 @@ KEYWORDS = {
     'SERIAL': {'keyword': '0-0:96.1.255', 'dtype': str}, # Serial number
     #'Out': '1-0:1.7.255', # Power total out
 }
+
+TS_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+SQLITE_CREATE = """CREATE TABLE IF NOT EXISTS meter_data
+                   ( meter TEXT
+                    ,l1 NUMERIC
+                    ,l2 NUMERIC
+                    ,l3 NUMERIC
+                    ,load NUMERIC
+                    ,kwh NUMERIC
+                    ,TS TEXT DEFAULT CURRENT_TIMESTAMP);"""
 
 def read():
     with serial.Serial(port=CONFIG['dev'], baudrate=9600, bytesize=7, parity='E', timeout=2) as ser:
@@ -44,7 +57,7 @@ def worker_read_meter(task_queues):
         try:
             reading = read()
             if reading and len(reading) == 270:
-                reading_dict ={'ts': time.time()} 
+                reading_dict ={'ts': datetime.datetime.now().strftime(TS_FORMAT)} 
                 for key in KEYWORDS:
                     value, unit = extract(key, reading)
                     reading_dict[key] = value
@@ -88,7 +101,78 @@ def worker_publish_mqtt(task_queue):
         time.sleep(0.1)
 
 def worker_sqlite(task_queue):
-    raise NotImplementedError
+    import sqlite3
+    logger = multiprocessing.get_logger()
+
+    while True:
+        try:
+            # TODO: Take care the queue doesnt get too large (in case of insert issues here)
+
+            if task_queue.qsize() >= CONFIG['sqlite']['min_rows_insert']:
+                #get readings and build sqlite filenames (maybe different fnames because of timestamp)
+                readings = {}
+                while not task_queue.empty():
+                    reading = task_queue.get()
+                    logger.debug(reading)
+                    #build sqlite filename with timestamp
+                    ts = datetime.datetime.strptime(reading['ts'], TS_FORMAT)
+                    reading['ts_datetime'] = ts
+                    fname = ts.strftime(CONFIG['sqlite']['fname'])
+                    logger.debug(fname)
+                    
+                    #put into dict
+                    if fname not in readings:
+                        readings[fname] =[]
+                    readings[fname].append(reading)
+                
+                #insert readings with bulk insert statements
+                for fname in readings:
+                    create_new = False
+                    if not os.path.exists(fname):
+                        #create new db
+                        create_new = True
+
+                    #connect to db
+                    conn = sqlite3.connect(fname)
+                    c = conn.cursor()
+                    logger.debug(f'connected to {fname}')
+
+                    #build insert stmnt
+                    sql = """INSERT INTO meter_data
+                             (meter, l1, l2, l3, kwh, ts) 
+                             VALUES (?,?,?,?,?,?);"""
+                    params = [(reading['SERIAL'], reading['L1'],
+                               reading['L2'], reading['L3'], reading['A+'], 
+                               reading['ts_datetime'].strftime('%Y-%m-%d %H:%M:%S'))
+                              for reading in readings[fname]] # [(row 1 col 1, row 1 col 2, ...), (...), ... ]
+
+                    try:
+                        if create_new:
+                            logger.debug('setting up new db...')
+                            c.execute(SQLITE_CREATE)
+
+                        #logger.debug(sql)
+                        #logger.debug(params)
+                        c.executemany(sql, params)
+                        conn.commit()
+                        logger.debug(f'insert into {fname} was successful. '
+                                     f'Inserted {len(readings[fname])} readings.')
+                    except:
+                        logger.exception(f'insert into {fname} failed')
+
+                        #add to queue again
+                        for reading in readings[fname]:
+                            logger.debug(f'add {reading} to queue again')
+                            task_queue.put(reading)
+                    
+                    #close db
+                    c.close()
+                    conn.close()
+                    logger.debug(f'closed connection to {fname}')
+                
+        except:
+            logger.exception('Error in worker_sqlite')
+        time.sleep(1)
 
 def worker_logfile(task_queue):
     raise NotImplementedError
