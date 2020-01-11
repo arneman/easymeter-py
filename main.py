@@ -61,7 +61,11 @@ def worker_read_meter(task_queues):
             logger.debug(f'reading: {reading}, len: {len(reading)}')
 
             if success: # and len(reading) == 270:
-                reading_dict ={'ts': datetime.datetime.now().strftime(TS_FORMAT)} 
+                if CONFIG['utc']:
+                    ts = datetime.datetime.utcnow()
+                else:
+                    ts = datetime.datetime.now()
+                reading_dict ={'ts': ts.strftime(TS_FORMAT)} 
                 for key in KEYWORDS:
                     value, unit = extract(key, reading)
                     reading_dict[key] = value
