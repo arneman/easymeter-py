@@ -3,6 +3,8 @@
 PYTHON_VERS=3.8.1
 PYTHON_VERS_SHORT=3.8
 
+cd ~ 
+
 sudo apt-get update -y
 sudo apt-get install build-essential tk-dev libncurses5-dev libncursesw5-dev libreadline6-dev libdb5.3-dev libgdbm-dev libsqlite3-dev libssl-dev libbz2-dev libexpat1-dev liblzma-dev zlib1g-dev libffi-dev -y
 wget https://www.python.org/ftp/python/$PYTHON_VERS/Python-$PYTHON_VERS.tar.xz
